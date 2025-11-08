@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import * as d3 from "d3";
 import * as topojson from "topojson-client";
 import "./Dashboard.css";
+import { data } from "react-router-dom";
 
 const Dashboard = () => {
   const svgRef = useRef(null);
@@ -73,25 +74,24 @@ const Dashboard = () => {
       .text("Cargando mapa de España...");
  
     const url = "https://cdn.jsdelivr.net/npm/es-atlas/es/municipalities.json"; 
-    
+
+    fetch('http://localhost:3000/municipio', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Datos de municipios cargados:', data); 
+        setMapInfo(data);
+      })
+      .catch(error => {
+        console.error('Error cargando datos de municipios:', error);
+      });
+
     d3.json(url)
-      .then(es => { 
-        /*
-        fetch(await import.meta.env.VITE_API_URL + '/data/municipios_enriched.geojson')
-          .then(response => response.json())
-          .then(data => {
-            setMapInfo(prev => ({
-              ...prev,
-              nombre: es.properties.name,
-              num_oficina: es.properties.num_oficina,
-              tiene_oficina: es.properties.tiene_oficina,
-              sueldo_medio: es.properties.sueldo_medio,
-              precio_alquiler: es.properties.precio_alquiler,
-              edad_media: es.properties.edad_media,
-              incremento_poblacion: es.properties.incremento_poblacion, 
-              poblacion: es.properties.poblacion
-        }));
-        */
+      .then(es => {         
         loadingText.text("Procesando municipios...");
         setStatus("Procesando municipios...");
          
