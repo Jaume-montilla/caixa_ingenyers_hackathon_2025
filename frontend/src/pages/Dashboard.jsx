@@ -716,30 +716,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label htmlFor="rango-desviacion" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span>Rango de desviación estándar</span>
-                <span className="desviacion-output" style={{ fontWeight: '700' }}>93%</span>
-              </label> 
-                <span>-</span>
-                <input
-                  id="desviacion-max"
-                  name="desviacion-max"
-                  type="number"
-                  min="0"
-                  max="100"
-                  defaultValue="65"
-                  onInput={(e) => {
-                    const form = e.target.closest('form');
-                    const minVal = form.querySelector('#edad-min').value;
-                    const maxVal = e.target.value;
-                    const out = form && form.querySelector('.edad-output');
-                    if (out) out.textContent = `${minVal}-${maxVal} años`;
-                  }}
-                  style={{ width: '45%', padding: '5px', borderRadius: '5px', border: '1px solid #ccc' }}
-                /> 
-            </div>
-
             <button 
               type="submit" 
               style={{
@@ -759,6 +735,118 @@ const Dashboard = () => {
             >
               Enviar
             </button>
+
+            <hr></hr>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="rango-desviacion" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span>Desviación estándar del mapa</span>
+                <span className="desviacion-output" style={{ fontWeight: '700' }}>93%</span>
+              </label>  
+                <input
+                  id="desviacion"
+                  name="desviacion"
+                  type="number"
+                  min="0"
+                  max="100"
+                  defaultValue="65"
+                  onInput={(e) => {
+                    const form = e.target.closest('form');
+                    const val = form.querySelector('#desviacion').value; 
+                    const out = form && form.querySelector('.desviacion-output');
+                    if (out) out.textContent = `${val}%`;
+                  }}
+                  style={{ width: '45%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc', marginRight: '10px' }}
+                /> 
+                <button
+                  type="button"
+                  style={{
+                    marginTop: '10px',
+                    padding: '8px 12px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    setIsLoading(true);
+                    try {
+                      const form = document.querySelector('form');
+                      const raw = form?.querySelector('#desviacion')?.value;
+                      if (!raw) return;
+                      const percent = Math.max(0, Math.min(100, Number(raw))) / 100;
+
+                      setStatus(`Aplicando desviación ${Math.round(percent * 100)}%...`);
+
+                      const fieldMapLocal = {
+                        'poblacion': 'poblacion',
+                        'numero_oficinas': 'num_oficinas',
+                        'sueldo_medio': 'sueldo_medio',
+                        'precio_alquiler': 'precio_alquiler',
+                        'edad_media': 'edad_media',
+                        'incremento_poblacion': 'increment_poblacio'
+                      };
+                      const field = fieldMapLocal[tipoMapa];
+                      const valuesArray = mapInfo
+                        .map(m => m[field])
+                        .filter(v => v !== undefined && v !== null && !isNaN(v));
+
+                      if (valuesArray.length === 0) {
+                        setStatus('No hay datos disponibles para aplicar la desviación.');
+                        return;
+                      }
+
+                      const sorted = [...valuesArray].sort((a, b) => a - b);
+                      const cutoffIndex = Math.floor(sorted.length * percent);
+                      const max = sorted[Math.min(cutoffIndex, sorted.length - 1)];
+                      const min = sorted[0];
+                      const palette = colores[tipoMapa] || colores.poblacion;
+
+                      const normalize = s => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
+
+                      const computeColor = (municipioName) => {
+                        const nameNorm = normalize(municipioName);
+                        const municipioData = mapInfo.find(m => m.nombre && normalize(m.nombre) === nameNorm);
+                        if (!municipioData) return '#e0e0e0';
+                        const value = municipioData[field];
+                        if (value === undefined || value === null || isNaN(value)) return '#e0e0e0';
+                        if (min === max) return palette[Math.floor(palette.length / 2)];
+                        if (value > max) return palette[palette.length - 1];
+                        const scale = d3.scaleQuantize().domain([min, max]).range(palette);
+                        return scale(value);
+                      };
+ 
+                      d3.selectAll('.main-group > path, .main-group .canarias-group path')
+                        .attr('fill', function(d) {
+                          const munName = d.properties?.name || d.properties?.NAME_2;
+                          return computeColor(munName);
+                        });
+ 
+                      const legendTexts = d3.selectAll('.legend text');
+                      if (!legendTexts.empty()) { 
+                        const rightText = legendTexts.nodes()[legendTexts.size() - 1];
+                        if (rightText) {
+                          const cutoffValue = sorted[Math.min(Math.floor(sorted.length * percent), sorted.length - 1)];
+                          d3.select(rightText).text('>' + (cutoffValue ? cutoffValue.toLocaleString('es-ES') : '—'));
+                        }
+                      }
+
+                      setTimeout(() => {
+                        setStatus(`Desviación aplicada: ${Math.round(percent * 100)}%`);
+                        setIsLoading(false);
+                      }, 300);
+                    } catch (err) {
+                      console.error(err);
+                      setStatus('Error aplicando desviación');
+                      setIsLoading(false);
+                    }
+                    
+                  }}
+                >
+                  Aplicar desviación
+                </button>
+            </div>
 
           </form>
         </div>
