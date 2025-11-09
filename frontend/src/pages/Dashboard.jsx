@@ -737,7 +737,7 @@ const Dashboard = () => {
             </button>
 
             <hr></hr>
-            
+
             <div style={{ marginBottom: '20px' }}>
               <label htmlFor="rango-desviacion" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span>Desviación estándar del mapa</span>
@@ -796,7 +796,7 @@ const Dashboard = () => {
                         setStatus('No hay datos disponibles para aplicar la desviación.');
                         return;
                       }
-
+ 
                       const sorted = [...valuesArray].sort((a, b) => a - b);
                       const cutoffIndex = Math.floor(sorted.length * percent);
                       const max = sorted[Math.min(cutoffIndex, sorted.length - 1)];
