@@ -6,7 +6,7 @@ const app = express();
 
 // Habilitar CORS
 app.use(cors());
-app.use(express.json()); // Middleware global para procesar solicitudes JSON
+app.use(express.json()); 
 
 // Crear credenciales de conexión a MySQL
 const pool = mariadb.createPool({
@@ -26,21 +26,17 @@ async function getMunicipio() {
     conn = await pool.getConnection();
     console.log("Conectado a MariaDB!");
 
-    // Obtener todos los datos de la tabla municipio
     const rows = await conn.query("SELECT * FROM municipio");
 
-    // Calcular valores mínimo y máximo para cada columna numérica
     const minMaxValues = {};
     const allData = [...rows];
 
-    // Recorremos las filas y calculamos los min y max para cada columna numérica
     if (rows.length > 0) {
       const columns = Object.keys(rows[0]);
 
       columns.forEach((col) => {
         const columnValues = rows.map((row) => row[col]);
 
-        // Filtrar solo valores numéricos
         const numericValues = columnValues.filter((value) => !isNaN(value));
 
         if (numericValues.length > 0) {
@@ -51,7 +47,6 @@ async function getMunicipio() {
       });
     }
 
-    // Agregar las nuevas columnas de impacto social y económico a cada fila
     const updatedData = rows.map(row => {
       return {
         ...row,
@@ -60,8 +55,6 @@ async function getMunicipio() {
       };
     });
 
-    // Devolvemos un array con el primer objeto siendo los valores min/max, 
-    // y el segundo objeto los datos completos con las nuevas columnas
     return [minMaxValues, updatedData];
   } catch (err) {
     console.error("Error de conexión:", err);
@@ -78,7 +71,6 @@ function calculateImpactoSocial(row) {
 	}
 }
 
-// Función para calcular el impacto económico
 function calculateImpactoEconomico(row) {
 	if (row.poblacion != 0 && row.sueldo_medio != 0) {
 		return (row.sueldo_medio/row.poblacion)
@@ -86,7 +78,6 @@ function calculateImpactoEconomico(row) {
 	return 0;
 }
 
-// Endpoint para obtener datos de la tabla municipio
 app.get("/municipio", async (req, res) => {
   try {
     const [minMaxValues, municipioData] = await getMunicipio();
@@ -105,7 +96,7 @@ app.get("/municipio", async (req, res) => {
 // Ruta PUT para manejar la solicitud al chatbot
 app.put("/chat", async (req, res) => {
 	try {
-		const prompt = req.body?.messages?.[0]?.content; // Obtener el prompt desde el cuerpo de la solicitud
+		const prompt = req.body?.messages?.[0]?.content;
 
 		if (!prompt) {
 			return res.status(400).send("No se proporcionó un mensaje en el cuerpo de la solicitud.");
@@ -135,7 +126,7 @@ async function createChatbot(prompt) {
 				messages: [
 					{ role: "user", content: prompt },
 				],
-				max_tokens: 500,
+				max_tokens: 10000,
 			}),
 		});
 

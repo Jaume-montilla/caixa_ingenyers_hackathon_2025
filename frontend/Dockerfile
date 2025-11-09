@@ -11,4 +11,3 @@ COPY . .
 EXPOSE 1576
 
 CMD ["npm", "run", "dev"]
-
