@@ -12,7 +12,8 @@ const Dashboard = () => {
   const [mapInfo, setMapInfo] = useState([]);
   const [topoData, setTopoData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [colorScale, setColorScale] = useState(null);
+  const percentatgeMapa = 0.93;
+
   const colores = {
     "numero_oficinas": [
       "#f7fbff",
@@ -101,13 +102,25 @@ const Dashboard = () => {
   };
 
   const dateToSee = (municipioName, tipo, mapInfo) => {
-    const xmunicipioNameSinAccento = municipioName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (!mapInfo || mapInfo.length === 0) return 'Datos no disponibles';
+    
+    const municipioNameSinAccento = municipioName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const municipioData = mapInfo.find(m => 
       m.nombre && municipioNameSinAccento && 
       m.nombre.toLowerCase().trim() === municipioNameSinAccento.toLowerCase().trim()
     );
     if (!municipioData) return 'Datos no disponibles';
+    
     const fieldMap = {
+      'poblacion': 'población',
+      'numero_oficinas': 'num_oficinas',
+      'sueldo_medio': 'sueldo_medio',
+      'precio_alquiler': 'precio_alquiler',
+      'edad_media': 'edad_media',
+      'incremento_poblacion': 'increment_poblacio'
+    };
+    
+    const labelMap = {
       'poblacion': 'Población',
       'numero_oficinas': 'Número de oficinas',
       'sueldo_medio': 'Sueldo medio',
@@ -115,14 +128,19 @@ const Dashboard = () => {
       'edad_media': 'Edad media',
       'incremento_poblacion': 'Incremento población'
     };
+    
     const field = fieldMap[tipo];
-    const value = municipioData[tipo];
-    if (value === undefined || value === null) return `${field}: Datos no disponibles`;
-    return `${field}: ${value}`;
+    const label = labelMap[tipo];
+    const value = municipioData[field];
+    
+    if (value === undefined || value === null) return `${label}: Datos no disponibles`;
+     
+    const formattedValue = Math.round(value).toLocaleString('es-ES');
+    return `${label}: ${formattedValue}`;
   }
 
   const getColorForMunicipio = (municipioName, tipo) => {
-    if (!colorScale) return '#e0e0e0';
+    if (!mapInfo || mapInfo.length === 0) return 'white';
     
     const municipioNameSinAccento = municipioName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
@@ -131,7 +149,9 @@ const Dashboard = () => {
       m.nombre.toLowerCase().trim() === municipioNameSinAccento.toLowerCase().trim()
     );
     
-    if (!municipioData) return '#e0e0e0';
+    if (!municipioData) { 
+      return '#e0e0e0';
+    }
     
     const fieldMap = {
       'poblacion': 'poblacion',
@@ -145,13 +165,38 @@ const Dashboard = () => {
     const field = fieldMap[tipo];
     const value = municipioData[field];
     
-    if (value === undefined || value === null || isNaN(value)) return '#e0e0e0';
+    if (value === undefined || value === null || isNaN(value)) {
+      return '#e0e0e0';
+    }
+     
+    const valuesArray = mapInfo
+      .map(m => m[field])
+      .filter(v => v !== undefined && v !== null && !isNaN(v));
     
-    return colorScale(value);
+    if (valuesArray.length === 0) return '#e0e0e0';
+     
+    const sortedValues = [...valuesArray].sort((a, b) => a - b);
+    const percentile95Index = Math.floor(sortedValues.length * percentatgeMapa);
+
+    const max = sortedValues[percentile95Index];
+    const min = sortedValues[0];
+    
+    if (min === max) {
+      return colores[tipo][Math.floor(colores[tipo].length / 2)];
+    }
+     
+    if (value > max) {
+      return colores[tipo][colores[tipo].length - 1];
+    }
+
+    const scale = d3.scaleQuantize()
+      .domain([min, max])
+      .range(colores[tipo]);
+    
+    return scale(value);
   };
 
-  useEffect(() => {
-    // Cargar datos del backend
+  useEffect(() => { 
     fetch('http://localhost:3000/municipio', {
       method: 'GET',
       headers: {
@@ -166,8 +211,7 @@ const Dashboard = () => {
       .catch(error => {
         console.error('Error cargando datos de municipios:', error);
       });
-
-    // Cargar TopoJSON
+ 
     const url = "https://cdn.jsdelivr.net/npm/es-atlas/es/municipalities.json";
     d3.json(url)
       .then(es => {
@@ -180,8 +224,7 @@ const Dashboard = () => {
   }, []);
  
   useEffect(() => {
-    if (!topoData || !mapInfo || mapInfo.length === 0 || !colorScale) return;
-
+    if (!topoData || !mapInfo || mapInfo.length === 0) return; 
     setIsLoading(true);
 
     const containerWidth = svgRef.current.parentElement.clientWidth;
@@ -332,7 +375,7 @@ const Dashboard = () => {
           .attr("y2", 135)
           .attr("stroke", "black")
           .attr("stroke-width", 2);
- 
+
         canariasGroup.selectAll("path")
           .data(canarias)
           .join("path")
@@ -351,7 +394,10 @@ const Dashboard = () => {
             const municipioName = d.properties.name || d.properties.NAME_2;
             
             tooltip
-              .html(`<strong>${municipioName}</strong>`)
+              .html(`
+                <strong>${municipioName}</strong><br/>
+                ${dateToSee(municipioName, tipoMapa, mapInfo)}
+              `)
               .style("left", (event.pageX + 10) + "px")
               .style("top", (event.pageY - 10) + "px")
               .style("opacity", 1);
@@ -375,15 +421,13 @@ const Dashboard = () => {
           .attr("text-anchor", "middle")
           .attr("font-size", "12px")
           .attr("font-weight", "bold");
-
-        // Añadir leyenda del gradiente
+ 
         const legendWidth = 200;
         const legendHeight = 20;
         const legendGroup = svg.append("g")
           .attr("class", "legend")
           .attr("transform", `translate(40, 40)`);
-
-        // Título de la leyenda
+ 
         const labels = {
           'poblacion': 'Población',
           'numero_oficinas': 'Número de oficinas',
@@ -400,8 +444,7 @@ const Dashboard = () => {
           .attr("font-weight", "bold")
           .attr("fill", "#333")
           .text(labels[tipoMapa]);
-
-        // Calcular min y max para la leyenda
+ 
         const fieldMap = {
           'poblacion': 'poblacion',
           'numero_oficinas': 'num_oficinas',
@@ -419,8 +462,7 @@ const Dashboard = () => {
         if (valuesArray.length > 0) {
           const min = Math.min(...valuesArray);
           const max = Math.max(...valuesArray);
-
-          // Crear gradiente
+ 
           const gradient = svg.append("defs")
             .append("linearGradient")
             .attr("id", "legend-gradient")
@@ -434,8 +476,7 @@ const Dashboard = () => {
               .attr("offset", `${(i / (colores[tipoMapa].length - 1)) * 100}%`)
               .attr("stop-color", color);
           });
-
-          // Rectángulo con el gradiente
+ 
           legendGroup.append("rect")
             .attr("x", 0)
             .attr("y", 0)
@@ -444,13 +485,13 @@ const Dashboard = () => {
             .style("fill", "url(#legend-gradient)")
             .attr("stroke", "#333")
             .attr("stroke-width", 1);
-
-          // Etiquetas min y max
+ 
           legendGroup.append("text")
             .attr("x", 0)
             .attr("y", legendHeight + 15)
             .attr("font-size", "12px")
             .attr("fill", "#333")
+            .attr("font-weight", "bold")
             .text(min.toLocaleString('es-ES'));
 
           legendGroup.append("text")
@@ -459,10 +500,10 @@ const Dashboard = () => {
             .attr("text-anchor", "end")
             .attr("font-size", "12px")
             .attr("fill", "#333")
-            .text(max.toLocaleString('es-ES'));
+            .attr("font-weight", "bold")
+            .text('>' + mapInfo?.map(m => m[field]).sort((a, b) => a - b)[Math.floor(mapInfo?.map(m => m[field]).length * percentatgeMapa)]?.toLocaleString('es-ES'));
         }
-
-    // Mapa cargado
+ 
     setTimeout(() => {
       setIsLoading(false);
     }, 500);
@@ -471,7 +512,7 @@ const Dashboard = () => {
       d3.selectAll(".map-tooltip").remove();
     };
 
-  }, [topoData, mapInfo, tipoMapa, colorScale]);
+  }, [topoData, mapInfo, tipoMapa]);
 
   return (
     <div className="dashboard-container">
@@ -489,8 +530,7 @@ const Dashboard = () => {
           Error: {error}
         </div>
       )}
-
-      {/* Modal de carga */}
+ 
       {isLoading && (
         <div style={{
           position: 'fixed',
@@ -674,6 +714,30 @@ const Dashboard = () => {
                   style={{ width: '45%', padding: '5px', borderRadius: '5px', border: '1px solid #ccc' }}
                 />
               </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="rango-desviacion" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span>Rango de desviación estándar</span>
+                <span className="desviacion-output" style={{ fontWeight: '700' }}>93%</span>
+              </label> 
+                <span>-</span>
+                <input
+                  id="desviacion-max"
+                  name="desviacion-max"
+                  type="number"
+                  min="0"
+                  max="100"
+                  defaultValue="65"
+                  onInput={(e) => {
+                    const form = e.target.closest('form');
+                    const minVal = form.querySelector('#edad-min').value;
+                    const maxVal = e.target.value;
+                    const out = form && form.querySelector('.edad-output');
+                    if (out) out.textContent = `${minVal}-${maxVal} años`;
+                  }}
+                  style={{ width: '45%', padding: '5px', borderRadius: '5px', border: '1px solid #ccc' }}
+                /> 
             </div>
 
             <button 
